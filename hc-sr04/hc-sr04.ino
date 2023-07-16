@@ -16,78 +16,74 @@
 // Amazon Link: https://www.amazon.co.uk/ELEGOO-Ultrasonic-Raspberry-Datasheet-Available/dp/B01M0QL1F1/ref=sr_1_2_sspa?keywords=HC-SR04&qid=1689429181&sr=8-2-spons&sp_csd=d2lkZ2V0TmFtZT1zcF9hdGY&psc=1
 
 // Pin Assignments
-#define TRIGGER_PIN 4 // TO DO
+#define TRIGGER_PIN 3 // TO DO
 #define ECHO_PIN 2 // TO DO
+#define LED_PIN 5
 
 // Datasheet Constants
 #define MAX_DISTANCE 4.5 // m
 #define SPEED_OF_SOUND 343 // m/s
-#define TIME_OUT (MAX_DISTANCE*2)/SPEED_OF_SOUND // s
+#define TIME_OUT ((MAX_DISTANCE*2)/SPEED_OF_SOUND)/1000000 // us
 #define MIN_TRIG_DURATION 10 // us
 #define MIN_CYCLE_PERIOD 50 // ms
+
+// Customisable Contants
+#define WARNING_DISTANCE 0.1 // m
 
 void setup() {
   
   // Pin configuration:
   pinMode(TRIGGER_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
-
+  pinMode(LED_PIN, OUTPUT);
   Serial.begin(115200);
 
 }
 
 void loop() {
-  readUltrasonicSensor();
-  delay(MIN_CYCLE_PERIOD); // ms
+  float distance = 0.0;
+  distance = readUltrasonicSensor();
+  distanceToSerialMonitor(distance);
+  ledIndication(distance);
+  delay(MIN_CYCLE_PERIOD); 
 }
 
-void readUltrasonicSensor() {
-  float timeSent = 0.0;
-  float timeReceived = 0.0;
-  float distance = 0.0;
-
+float readUltrasonicSensor() {
+  unsigned long pulseDuration = 0.0;
+  
   Serial.println("Scanning Environment...");
-  timeSent = sendTrigger();
-  timeReceived = receiveEcho(timeSent);
-  distance = calculateDistance(timeSent, timeReceived);
+  sendTrigger();
+  pulseDuration = receiveEcho();
+  return calculateDistance(pulseDuration);
+}
 
-  if(distance > 0.0){
-    Serial.println("Object Detected at " + String(distance) + " m");
+void distanceToSerialMonitor(float distance){
+  Serial.print("Object Detected at: ");
+  Serial.print(distance);
+  Serial.println(" m");
+}
+
+void ledIndication(float distance){
+  if(distance < WARNING_DISTANCE){ // If object is less than 0.5m away, turn on LED   
+    digitalWrite(LED_PIN, HIGH);
   }
   else{
-    Serial.println("No Objects Detected...");
+    digitalWrite(LED_PIN, LOW);
   }
-  
 }
 
-float sendTrigger(){
+void sendTrigger(){
+  digitalWrite(TRIGGER_PIN, LOW); // Ensure Trigger Pin initially LOW
+  delay(2); // 2ms delay
   digitalWrite(TRIGGER_PIN, HIGH);
   delayMicroseconds(MIN_TRIG_DURATION);
   digitalWrite(TRIGGER_PIN, LOW);
-  return millis();
 }
 
-float receiveEcho(float timeSent){
-  float timeElapsed = 0.0;
-  float currentTime = 0.0;
-  
-  while(timeElapsed < TIME_OUT){ 
-    
-    if(!digitalRead(ECHO_PIN)){ // ECHO_PIN reads HIGH until it receives a reflected signal
-      return millis();
-    }
-    currentTime = millis();
-    timeElapsed = (currentTime - timeSent)*0.001; // s
-  }
-  return timeSent; // Set timeReceived to a default value if no reflected signal is received
+unsigned long receiveEcho(){
+  return pulseIn(ECHO_PIN, HIGH, TIME_OUT);  // Measures pulse  
 }
 
-float calculateDistance(float timeSent, float timeReceived){
-
-  if(timeReceived > timeSent){
-    return (SPEED_OF_SOUND*(timeReceived - timeSent))/2;
-  }
-  else{
-    return 0;
-  }
+float calculateDistance(float pulseDuration){
+  return (SPEED_OF_SOUND*(pulseDuration/1000000))/2;
 }
